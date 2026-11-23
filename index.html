@@ -560,6 +560,43 @@ body.is-dragging{cursor:grabbing;user-select:none}
   .ed{grid-template-columns:1fr}
   .nowcard{grid-template-columns:1fr}
 }
+
+/* Google-Calendar-like mobile grid */
+@media (max-width: 860px){
+  :root{--hh:64px;--gut:40px}
+  .tg{--colmin:0px}
+  .hide-m{display:none}
+  .tg-hours span{font-size:10.5px;right:6px;top:-6px}
+  .tg-cols{background-image:repeating-linear-gradient(to bottom,var(--line-2) 0 1px,transparent 1px var(--hh))}
+  .tg-col{border-left-color:var(--line-2)}
+  .tg-col.is-today{background:transparent}
+  .tg-dh.gd{flex-direction:column;align-items:center;gap:1px;padding:6px 2px 8px;text-align:center;flex-wrap:nowrap}
+  .tg-dh.gd span{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-3);font-weight:600}
+  .tg-dh.gd b{font-size:20px;width:34px;height:34px;display:grid;place-items:center;border-radius:50%;padding:0;background:none;color:var(--ink)}
+  .tg-dh.gd.today span{color:var(--accent)}
+  .tg-dh.gd.today b{background:var(--accent);color:var(--accent-ink)}
+  .tg-dh.gd .fs{font-style:normal;font-size:11px;color:var(--ok);font-weight:600}
+  .ev{background:color-mix(in srgb,var(--c) 85%,#000);border-left:0;color:#fff;border-radius:6px;padding:4px 6px;box-shadow:none}
+  .ev-sch,.ev-ext{background:color-mix(in srgb,var(--c) 85%,#000)}
+  .ev-task{background:var(--surface);color:var(--ink);border:1.5px solid var(--c)}
+  .ev.is-mod::after{background:#fff}
+  .ev-t{font-size:12.5px;font-weight:600;line-height:1.25}
+  .ev:not(.is-short) .ev-t{-webkit-line-clamp:4}
+  .ev-m{font-size:11.5px;opacity:.9}
+  .tg-n7 .ev,.tg-n3 .ev.is-short{padding:3px 3px 3px 4px}
+  .tg-n7 .ev-t{font-size:10.5px;font-weight:600;line-height:1.2;word-break:normal;overflow-wrap:normal;hyphens:auto;-webkit-hyphens:auto;-webkit-line-clamp:6!important}
+  .tg-n7 .ev{padding:3px 2px 3px 4px}
+  .tg-n7 .ev-m{display:none}
+  .tg-n7 .ev-t .i,.tg-n3 .ev-t .i{display:none}
+  .tg-n7 .free span{display:none}
+  .tg-n7 .free{left:1px;right:1px}
+  .tg-n7 .adchip{font-size:10px;padding:1px 3px}
+  .free{background:color-mix(in srgb,var(--ok) 7%,transparent);border-style:dashed}
+  .nowline{height:2px}
+  .tg-head{box-shadow:0 1px 0 var(--line)}
+  .m-tb .seg{grid-template-columns:repeat(4,1fr)}
+  .m-tb .seg button{padding:6px 4px}
+}
 </style>
 </head>
 <body>
@@ -975,7 +1012,7 @@ function exportIcs(){
 
 /* ================= UI state & routing ================= */
 const ROUTES=[['avui','Avui',I.home],['calendari','Calendari',I.cal],['horari','Horari setmanal',I.grid],['tasques','Tasques',I.check],['planificar','Planifica el dia',I.plan],['estadistiques','Estadístiques',I.chart],['ajustos','Ajustos',I.gear]];
-const st={route:'avui',calView:innerWidth<760?'day':'week',calDate:today(),taskTab:'avui',fCat:'',fPrio:'',hiddenCats:new Set(),showSch:true,planDate:today(),statsWeek:weekStart(today()),showFree:true,scroll:{}};
+const st={route:'avui',calView:innerWidth<760?'3day':'week',calDate:today(),taskTab:'avui',fCat:'',fPrio:'',hiddenCats:new Set(),showSch:true,planDate:today(),statsWeek:weekStart(today()),showFree:true,scroll:{}};
 try{const p=JSON.parse(localStorage.getItem('agenda-ui')||'{}');if(p.calView)st.calView=p.calView;if(typeof p.showFree==='boolean')st.showFree=p.showFree}catch(e){}
 const saveUi=()=>{try{localStorage.setItem('agenda-ui',JSON.stringify({calView:st.calView,showFree:st.showFree}))}catch(e){}};
 function readHash(){const h=(location.hash||'').slice(1);st.route=ROUTES.some(r=>r[0]===h)?h:'avui'}
@@ -1051,7 +1088,7 @@ function timeGrid({dates,items,heads,free,mode,colmin,allDay}){
     const now=isT&&nm>=s0&&nm<=s1?`<div class="nowline" style="top:${(nm-s0)/60*H}px"></div>`:'';
     return `<div class="tg-col ${isT?'is-today':''}" data-date="${d}" data-mode="${mode}">${fr}${its.map(o=>evBlock(o,s0,s1,H)).join('')}${now}</div>`;
   }).join('');
-  return `<div class="tg" style="--cols:${dates.length};${colmin?`--colmin:${colmin}px;`:''}"><div class="tg-scroll"><div class="tg-inner">
+  return `<div class="tg tg-n${dates.length}" style="--cols:${dates.length};${colmin?`--colmin:${colmin}px;`:''}"><div class="tg-scroll"><div class="tg-inner">
     <div class="tg-head"><div></div><div class="hc">${heads.join('')}</div>${allDay&&allDay.length?`<div class="tg-adl">Dia</div><div class="hc tg-ad">${dates.map(d=>`<div>${adOn(allDay,d).map(a=>`<button class="adchip" style="--c:${cat(a.cat).color}" data-open-occ="${esc(a.key)}">${esc(a.title)}</button>`).join('')}</div>`).join('')}</div>`:''}</div>
     <div class="tg-body"><div class="tg-hours">${hours.map(h=>`<div><span>${pad(h)}:00</span></div>`).join('')}</div>
     <div class="tg-cols" style="height:${(s1-s0)/60*H}px">${cols}</div></div>
@@ -1147,7 +1184,8 @@ function weekStrip(sel){
     return `<button class="ws-d ${d===sel?'sel':''} ${d===t?'today':''}" data-goto-day="${d}" aria-label="${fmtLong(d)}"><span>${DAYS_S[i]}</span><b>${pd(d).getDate()}</b><i class="ws-dots">${sch?'<em class="s"></em>':''}${dots.map(c=>`<em style="--c:${c}"></em>`).join('')}${due?'<em class="t"></em>':''}</i></button>`}).join('')}</div>`;
 }
 function vCal(){
-  const v=st.calView,d=st.calDate,mob=isMobile();
+  const mob=isMobile();if(!mob&&st.calView==='3day')st.calView='week';
+  const v=st.calView,d=st.calDate;
   let label,body;
   const vis=o=>!st.hiddenCats.has(o.cat)&&(st.showSch||o.type!=='sch');
   const MON=m=>MONTHS[m][0].toUpperCase()+MONTHS[m].slice(1);
@@ -1172,22 +1210,23 @@ function vCal(){
     }
     body=`<div class="month"><div class="m-head">${(mob?DAYS_S:DAYS).map(x=>`<div>${x}</div>`).join('')}</div><div class="m-grid">${cells}</div></div>`;
   }else{
-    const dates=v==='week'?Array.from({length:7},(_,i)=>addDays(weekStart(d),i)):[d];
+    const dates=v==='week'?Array.from({length:7},(_,i)=>addDays(weekStart(d),i)):v==='3day'?[d,addDays(d,1),addDays(d,2)]:[d];
     const f=dates[0],l=dates[dates.length-1];
     if(mob){const m=pd(d);label=`${MON(m.getMonth())} ${m.getFullYear()}`}
     else if(v==='week'){const a=pd(f),b=pd(l);label=a.getMonth()===b.getMonth()?`${a.getDate()} – ${b.getDate()} ${deMonth(b.getMonth())} ${b.getFullYear()}`:`${a.getDate()} ${MONTHS_S[a.getMonth()]} – ${b.getDate()} ${MONTHS_S[b.getMonth()]} ${b.getFullYear()}`}
+    else if(v==='3day'){const a=pd(f),b=pd(l);label=`${a.getDate()} – ${b.getDate()} ${deMonth(b.getMonth())} ${b.getFullYear()}`}
     else label=fmtLong(d)+' '+pd(d).getFullYear();
     const items=occs(f,l).filter(vis);
-    const heads=dates.map(x=>`<div class="tg-dh ${x===today()?'today':''}" ${v==='week'?`data-goto="${x}"`:''}>${v==='day'&&mob?DAYS[wd(x)]:DAYS_S[wd(x)]} <b>${pd(x).getDate()}</b></div>`);
-    body=timeGrid({dates,items,heads,mode:'cal',colmin:v==='week'?(mob?84:96):0,allDay:extAllDay(f,l).filter(vis)});
+    const heads=dates.map(x=>mob?`<div class="tg-dh gd ${x===today()?'today':''}" ${v!=='day'?`data-goto="${x}"`:''}><span>${v==='day'?DAYS[wd(x)]:DAYS_S[wd(x)]}</span><b>${pd(x).getDate()}</b></div>`:`<div class="tg-dh ${x===today()?'today':''}" ${v==='week'?`data-goto="${x}"`:''}>${DAYS_S[wd(x)]} <b>${pd(x).getDate()}</b></div>`);
+    body=timeGrid({dates,items,heads,mode:'cal',colmin:mob?0:v==='week'?96:0,allDay:extAllDay(f,l).filter(vis)});
   }
   const unsched=sortTasks(tasksAll().filter(t=>!t.done&&!t.slot)).slice(0,40);
-  const seg=`<div class="seg">${[['day','Dia'],['week','Setmana'],['month','Mes']].map(([k,l])=>`<button data-calview="${k}" class="${v===k?'on':''}">${l}</button>`).join('')}</div>`;
+  const seg=`<div class="seg">${(mob?[['day','Dia'],['3day','3 dies'],['week','Setmana'],['month','Mes']]:[['day','Dia'],['week','Setmana'],['month','Mes']]).map(([k,l])=>`<button data-calview="${k}" class="${v===k?'on':''}">${l}</button>`).join('')}</div>`;
   const chips=`<div class="chips">${catsSorted().map(c=>`<button class="chip ${st.hiddenCats.has(c.id)?'off':''}" data-togglecat="${c.id}" style="--c:${safeColor(c.color)}"><i class="dot"></i>${esc(c.name)}</button>`).join('')}<button class="chip ${st.showSch?'':'off'}" data-act="toggle-sch">${I.repeat} Horari fix</button></div>`;
   const tb=mob?`<div class="toolbar m-tb">
-      <div class="m-row"><span class="lbl">${label}</span><span class="sp"></span><button class="icon-btn ${st.showFilters?'on':''}" data-act="toggle-filters" aria-label="Filtres">${I.filter}</button><button class="btn-s" data-act="cal-today">Avui</button></div>
+      <div class="m-row"><span class="lbl">${label}</span><span class="sp"></span><button class="icon-btn" data-act="${v==='day'?'cal-prev-w':'cal-prev'}" aria-label="Anterior">${I.left}</button><button class="icon-btn" data-act="${v==='day'?'cal-next-w':'cal-next'}" aria-label="Següent">${I.right}</button><button class="icon-btn ${st.showFilters?'on':''}" data-act="toggle-filters" aria-label="Filtres">${I.filter}</button><button class="btn-s" data-act="cal-today">Avui</button></div>
       ${seg}
-      ${v!=='month'?`<div class="m-row strip-row"><button class="icon-btn" data-act="cal-prev-w" aria-label="Setmana anterior">${I.left}</button>${weekStrip(d)}<button class="icon-btn" data-act="cal-next-w" aria-label="Setmana següent">${I.right}</button></div>`:`<div class="m-row"><button class="icon-btn" data-act="cal-prev" aria-label="Mes anterior">${I.left}</button><span class="sp"></span><button class="icon-btn" data-act="cal-next" aria-label="Mes següent">${I.right}</button></div>`}
+      ${v==='day'?`<div class="m-row strip-row">${weekStrip(d)}</div>`:''}
       ${st.showFilters?chips:''}
     </div>`
    :`<div class="toolbar">${seg}
@@ -1282,7 +1321,8 @@ function vHorari(){
   const items=Object.values(S.sch).map(s=>{const a=toMin(s.start),b=toMin(s.end);return {key:`tpl:${s.id}`,type:'sch',id:s.id,date:dates[s.day],start:a,end:b,title:s.title,cat:s.cat,location:s.location}}).filter(o=>o.start!=null&&o.end>o.start);
   const free={};const sums=[];
   dates.forEach((d,i)=>{const busy=items.filter(o=>o.date===d).map(o=>[o.start,o.end]);const fr=freeFrom(busy,c.dayStart*60,c.dayEnd*60,30);free[d]=fr;sums.push(fr.reduce((a,[x,y])=>a+y-x,0))});
-  const heads=dates.map((d,i)=>`<div class="tg-dh"><b style="font-size:13.5px">${innerWidth<760?DAYS_S[i]:DAYS[i]}</b>${st.showFree?`<span class="free-sum">${durTxt(sums[i])} lliures</span>`:''}</div>`);
+  const mob=isMobile();
+  const heads=dates.map((d,i)=>mob?`<div class="tg-dh gd"><span>${DAYS_S[i]}</span>${st.showFree?`<em class="fs">${Math.round(sums[i]/60)}h</em>`:''}</div>`:`<div class="tg-dh"><b style="font-size:13.5px">${DAYS[i]}</b>${st.showFree?`<span class="free-sum">${durTxt(sums[i])} lliures</span>`:''}</div>`);
   // upcoming exceptions
   const t=today();const exc=[];
   Object.values(S.sch).forEach(s=>Object.entries(s.exc||{}).forEach(([d,x])=>{if(d>=t)exc.push({s,d,x})}));
@@ -1291,13 +1331,13 @@ function vHorari(){
   return {title:'Horari setmanal',flush:true,html:`
   <div class="toolbar">
     <span class="lbl">El meu horari habitual</span>
-    <span class="muted" style="font-size:12.5px">${items.length} activitats · ${durTxt(busyH)} ocupades a la setmana</span>
+    <span class="muted hide-m" style="font-size:12.5px">${items.length} activitats · ${durTxt(busyH)} ocupades a la setmana</span>
     <span class="sp"></span>
-    <button class="chip ${st.showFree?'on':''}" data-act="toggle-free">Mostra hores lliures</button>
-    <button class="btn primary" data-act="new-sch">${I.plus} Afegeix activitat</button>
+    <button class="chip ${st.showFree?'on':''}" data-act="toggle-free">${mob?'Hores lliures':'Mostra hores lliures'}</button>
+    <button class="btn primary" data-act="new-sch">${I.plus} ${mob?'Afegeix':'Afegeix activitat'}</button>
   </div>
   <div class="cal-wrap">
-    <div class="cal-main">${timeGrid({dates,items,heads,mode:'sch',free:st.showFree?free:null,colmin:110})}</div>
+    <div class="cal-main">${timeGrid({dates,items,heads,mode:'sch',free:st.showFree?free:null,colmin:mob?0:110})}</div>
     <aside class="cal-side">
       <div class="sec-h"><h3>Com funciona</h3></div>
       <p class="muted" style="font-size:12.5px;margin:0 0 18px">Aquestes activitats es repeteixen cada setmana i apareixen al calendari. Arrossega-les per canviar-ne l\u2019hora o el dia de tota la sèrie. Per canviar un sol dia, fes-ho des del calendari.</p>
@@ -1796,14 +1836,14 @@ document.addEventListener('touchstart',e=>{
   if(e.target.closest('button,input,select,textarea,a'))return;
   const t=e.touches[0],row=e.target.closest('.tswipe .trow'),cal=e.target.closest('[data-swipe=cal]');
   if(row&&!row.classList.contains('is-done'))sw={kind:'task',row,wrap:row.parentNode,x0:t.clientX,y0:t.clientY,dx:0,on:false};
-  else if(cal&&st.calView!=='week')sw={kind:'cal',x0:t.clientX,y0:t.clientY,dx:0,on:false};
+  else if(cal)sw={kind:'cal',x0:t.clientX,y0:t.clientY,dx:0,on:false};
 },{passive:true});
 document.addEventListener('touchmove',e=>{
   if(!sw)return;if(drag&&drag.active){sw=null;return}
   const t=e.touches[0],dx=t.clientX-sw.x0,dy=t.clientY-sw.y0;
   if(!sw.on){
     if(Math.abs(dy)>12&&Math.abs(dy)>Math.abs(dx)){sw=null;return}
-    if(Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.3){sw.on=true;if(drag){clearTimeout(drag.timer);drag=null}}else return;
+    if(Math.abs(dx)>16&&Math.abs(dx)>Math.abs(dy)*(sw.kind==='cal'?2:1.3)){sw.on=true;if(drag){clearTimeout(drag.timer);drag=null}}else return;
   }
   sw.dx=dx;
   if(sw.kind==='task'){e.preventDefault();sw.row.style.transition='none';sw.row.style.transform=`translateX(${dx}px)`;
@@ -1812,7 +1852,7 @@ document.addEventListener('touchmove',e=>{
 document.addEventListener('touchend',()=>{
   if(!sw)return;const s=sw;sw=null;if(!s.on)return;
   suppressClick=true;setTimeout(()=>suppressClick=false,80);
-  if(s.kind==='cal'){if(Math.abs(s.dx)>60){const n=s.dx<0?1:-1;if(st.calView==='month'){const d=pd(st.calDate);st.calDate=ds(new Date(d.getFullYear(),d.getMonth()+n,1))}else st.calDate=addDays(st.calDate,n);render()}return}
+  if(s.kind==='cal'){if(Math.abs(s.dx)>90){const n=s.dx<0?1:-1;if(st.calView==='month'){const d=pd(st.calDate);st.calDate=ds(new Date(d.getFullYear(),d.getMonth()+n,1))}else st.calDate=addDays(st.calDate,n*(st.calView==='week'?7:st.calView==='3day'?3:1));render()}return}
   const id=s.row.dataset.openTask;
   s.row.style.transition='transform .18s ease-out';
   if(Math.abs(s.dx)>90){s.row.style.transform=`translateX(${s.dx>0?'110%':'-110%'})`;setTimeout(()=>{if(s.dx>0){toggleTask(id);toast('Tasca completada.',{action:{label:'Desfés',fn:()=>{const t=S.task[id];if(t&&t.done)put('task',{...clone(t),done:false,doneAt:null})}}})}else postpone(id)},170)}
@@ -1841,7 +1881,7 @@ document.addEventListener('click',e=>{
   const a=t.closest('[data-act]');
   if(a){
     const act=a.dataset.act;
-    const calStep=n=>{const v=st.calView;if(v==='month'){const d=pd(st.calDate);st.calDate=ds(new Date(d.getFullYear(),d.getMonth()+n,1))}else st.calDate=addDays(st.calDate,n*(v==='week'?7:1));render()};
+    const calStep=n=>{const v=st.calView;if(v==='month'){const d=pd(st.calDate);st.calDate=ds(new Date(d.getFullYear(),d.getMonth()+n,1))}else st.calDate=addDays(st.calDate,n*(v==='week'?7:v==='3day'?3:1));render()};
     switch(act){
       case 'create':{const map={calendari:['evt',{date:st.calDate}],horari:['sch',{}],planificar:['task',{due:st.planDate}],tasques:['task',{due:st.taskTab==='dema'?addDays(today(),1):st.taskTab==='pendents'?null:today()}]};const [ty,dd]=map[st.route]||['task',{}];openCreate(ty,dd);break}
       case 'search':openSearch();break;

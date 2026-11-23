@@ -451,6 +451,7 @@ body.is-dragging{cursor:grabbing;user-select:none}
 .adchip{display:block;width:100%;text-align:left;font-size:11.5px;font-weight:600;padding:2px 6px;border-radius:4px;background:color-mix(in srgb,var(--c) 24%,var(--surface));color:color-mix(in srgb,var(--c) 40%,var(--ink));white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .adchip.lg{font-size:13px;padding:8px 11px;border-radius:9px;margin-bottom:8px}
 .m-chip.ad{font-weight:600}
+.adchip.off,.m-chip.off{background:var(--surface-2);color:var(--ink-2)}
 .m-big{display:none}
 .feed-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--line-2)}
 .feed-b{flex:1;min-width:0;display:flex;flex-direction:column}
@@ -790,7 +791,7 @@ function saveExtLocal(){try{localStorage.setItem(LSX(),JSON.stringify({f:FEEDS,e
 async function pullExt(){
   if(!SB||!USER)return;
   try{
-    const {data:f,error:e1}=await SB.from('feeds').select('id,name,url,cat,reminder,enabled,last_sync,last_error,event_count,created_at,source').order('created_at');if(e1)throw e1;
+    const {data:f,error:e1}=await SB.from('feeds').select('id,name,url,cat,reminder,enabled,last_sync,last_error,event_count,created_at,source,ext_id').order('created_at');if(e1)throw e1;
     const {data:x,error:e2}=await SB.from('ext_events').select('feed_id,uid,date,end_date,all_day,start_min,end_min,title,location,notes').gte('end_date',addDays(today(),-40)).lte('date',addDays(today(),200)).order('date').limit(5000);if(e2)throw e2;
     FEEDS={};(f||[]).forEach(r=>FEEDS[r.id]=r);EXT=x||[];saveExtLocal();scheduleRender();remindersSoon();
   }catch(e){}
@@ -811,14 +812,29 @@ async function syncFeedNow(id,quiet){
   if(st.route==='ajustos')render();
 }
 
+/* ================= days off ================= */
+const HOLI_RE=/(festiu|festa|vacances|vacacions|no lectiu|holiday|natale|nadal)/i;
+const isHoliFeed=f=>!!f&&((f.ext_id&&/holiday/i.test(f.ext_id))||/festiu|holiday|vacances/i.test(f.name||''));
+const offPeriods=()=>(cfg().off||[]).filter(p=>p&&p.from&&p.to);
+function offMap(from,to){
+  const m={};
+  for(const p of offPeriods()){if(p.to<from||p.from>to)continue;for(let d=p.from<from?from:p.from;d<=p.to&&d<=to;d=addDays(d,1)){const cur=m[d];if(!cur||p.scope==='all')m[d]={name:p.name||'Vacances',scope:p.scope||'classes'}}}
+  for(const e of EXT){if(!e.all_day||!extOk(e)||e.end_date<from||e.date>to)continue;const f=feedOf(e);if(!isHoliFeed(f)&&!HOLI_RE.test(e.title||''))continue;for(let d=e.date<from?from:e.date;d<=e.end_date&&d<=to;d=addDays(d,1)){if(!m[d])m[d]={name:e.title||'Festiu',scope:'classes'}}}
+  return m;
+}
+function offAllDay(from,to){return offPeriods().filter(p=>p.to>=from&&p.from<=to).map(p=>({key:`off:${p.id}`,type:'off',allDay:true,id:p.id,date:p.from,end_date:p.to,title:`${p.name||'Vacances'}${p.scope==='all'?'':' · sense classes'}`,cat:'altres'}))}
+const allDayAll=(from,to)=>[...offAllDay(from,to),...extAllDay(from,to)];
+
 /* ================= domain ================= */
 function occs(from,to){
   const out=[];
   const schs=Object.values(S.sch);
+  const OFF=offMap(from,to);
   for(let d=from;d<=to;d=addDays(d,1)){
-    const w=wd(d);
+    const w=wd(d),off=OFF[d];
     for(const s of schs){
       if(s.day!==w)continue;
+      if(off&&(off.scope==='all'||s.cat==='estudis'))continue;
       if(s.from&&d<s.from)continue;if(s.until&&d>s.until)continue;
       const ex=s.exc&&s.exc[d];if(ex&&ex.cancel)continue;
       const o={...s,...(ex||{})};
@@ -1145,7 +1161,7 @@ function vDash(){
     <div style="display:flex;flex-direction:column;gap:20px;min-width:0">
       <section class="panel">
         <div class="sec-h"><h3>El teu dia</h3><span class="n">${freeMin?`${durTxt(freeMin)} lliures${t===today()?' a partir d\u2019ara':''}`:'Sense espais lliures'}</span><span class="sp"></span><a class="btn-s" href="#planificar">Planifica</a></div>
-        ${adOn(extAllDay(t,t),t).map(a=>`<button class="adchip lg" style="--c:${cat(a.cat).color}" data-open-occ="${esc(a.key)}">Tot el dia · ${esc(a.title)}</button>`).join('')}
+        ${adOn(allDayAll(t,t),t).map(a=>`<button class="adchip lg" style="--c:${cat(a.cat).color}" data-open-occ="${esc(a.key)}">Tot el dia · ${esc(a.title)}</button>`).join('')}
         <div class="daybar" style="--n:${c.dayEnd-c.dayStart}">${blocks}${nm>=s0&&nm<=s1?`<div class="now" style="left:${(nm-s0)/span*100}%"></div>`:''}</div>
         <div class="daybar-ticks">${ticks.join('')}</div>
         <div class="nowcard">${cell('Ara',cur,'Res programat ara mateix')}${cell('Següent',nxt,'No hi ha res més avui')}</div>
@@ -1194,7 +1210,7 @@ function vCal(){
     const dd=pd(d),first=ds(new Date(dd.getFullYear(),dd.getMonth(),1)),gs=weekStart(first),ge=addDays(gs,41);
     label=`${MON(dd.getMonth())} ${dd.getFullYear()}`;
     const all=occs(gs,ge).filter(vis);const by={};all.forEach(o=>(by[o.date]=by[o.date]||[]).push(o));
-    const ads=extAllDay(gs,ge).filter(vis);
+    const ads=allDayAll(gs,ge).filter(o=>o.type==='off'||vis(o));
     const dueBy={};tasksAll().filter(t=>!t.done&&t.due&&!t.slot&&!st.hiddenCats.has(t.cat)).forEach(t=>(dueBy[t.due]=dueBy[t.due]||[]).push(t));
     let cells='';
     for(let i=0;i<42;i++){
@@ -1219,7 +1235,7 @@ function vCal(){
     else label=fmtLong(d)+' '+pd(d).getFullYear();
     const items=occs(f,l).filter(vis);
     const heads=dates.map(x=>mob?`<div class="tg-dh gd ${x===today()?'today':''}" ${v!=='day'?`data-goto="${x}"`:''}><span>${v==='day'?DAYS[wd(x)]:DAYS_S[wd(x)]}</span><b>${pd(x).getDate()}</b></div>`:`<div class="tg-dh ${x===today()?'today':''}" ${v==='week'?`data-goto="${x}"`:''}>${DAYS_S[wd(x)]} <b>${pd(x).getDate()}</b></div>`);
-    body=timeGrid({dates,items,heads,mode:'cal',colmin:mob?0:v==='week'?96:0,allDay:extAllDay(f,l).filter(vis)});
+    body=timeGrid({dates,items,heads,mode:'cal',colmin:mob?0:v==='week'?96:0,allDay:allDayAll(f,l).filter(o=>o.type==='off'||vis(o))});
   }
   const unsched=sortTasks(tasksAll().filter(t=>!t.done&&!t.slot)).slice(0,40);
   const seg=`<div class="seg">${(mob?[['day','Dia'],['3day','3 dies'],['week','Setmana'],['month','Mes']]:[['day','Dia'],['week','Setmana'],['month','Mes']]).map(([k,l])=>`<button data-calview="${k}" class="${v===k?'on':''}">${l}</button>`).join('')}</div>`;
@@ -1251,7 +1267,7 @@ function vDashM(){
   const c=cfg(),t=today(),h=new Date().getHours(),nm=nowMin(),now=Date.now();
   const greet=h>=6&&h<13?'Bon dia':h>=13&&h<20?'Bona tarda':'Bona nit';
   const todays=occs(t,t).filter(o=>!(o.type==='task'&&o.done));
-  const ads=adOn(extAllDay(t,t),t);
+  const ads=adOn(allDayAll(t,t),t);
   const tToday=tasksAll().filter(x=>x.due===t||(x.slot&&x.slot.date===t)||(x.done&&x.doneAt&&ds(new Date(x.doneAt))===t&&(!x.due||x.due<=t)));
   const done=tToday.filter(x=>x.done).length,total=tToday.length,pct=total?Math.round(done/total*100):0;
   const overdue=sortTasks(tasksAll().filter(isOverdue));
@@ -1334,6 +1350,7 @@ function vHorari(){
     <span class="lbl">El meu horari habitual</span>
     <span class="muted hide-m" style="font-size:12.5px">${items.length} activitats · ${durTxt(busyH)} ocupades a la setmana</span>
     <span class="sp"></span>
+    <button class="chip" data-act="off-days">${mob?'Vacances':'Vacances i festius'}</button>
     <button class="chip ${st.showFree?'on':''}" data-act="toggle-free">${mob?'Hores lliures':'Mostra hores lliures'}</button>
     <button class="btn primary" data-act="new-sch">${I.plus} ${mob?'Afegeix':'Afegeix activitat'}</button>
   </div>
@@ -1587,6 +1604,7 @@ function restoreExc(sid,date){const s=S.sch[sid];if(!s||!s.exc||!s.exc[date])ret
 /* schedule occurrence (from calendar) */
 function openOcc(key){
   if(key.startsWith('ext:'))return openExt(key);
+  if(key.startsWith('off:'))return openOff();
   const p=key.split(':');
   if(p[0]==='evt')return openEvt(p[1]);
   if(p[0]==='task')return openTask(p[1]);
@@ -1664,6 +1682,33 @@ function openExt(key){
     <p class="note-box" style="margin-top:12px"><span class="dot" style="--c:${c.color};margin-right:6px"></span>Ve de <b>${esc(f.name)}</b> (${esc(c.name)}). Per canviar-lo, edita\u2019l a l\u2019app d\u2019origen: l\u2019agenda s\u2019actualitza sola cada 15 minuts.</p>
     <div class="ed-foot"><span class="sp"></span><button type="button" class="btn" data-close>Tanca</button></div>
   </div></div>`);
+}
+
+/* vacation periods & holidays */
+function openOff(){
+  const t=today(),list=offPeriods().slice().sort((a,b)=>a.from.localeCompare(b.from));
+  const holis=EXT.filter(e=>e.all_day&&extOk(e)&&e.end_date>=t&&(isHoliFeed(feedOf(e))||HOLI_RE.test(e.title||''))).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,12);
+  const rng=p=>p.from===p.to?fmtShort(p.from):`${fmtShort(p.from)} – ${fmtShort(p.to)}`;
+  openModal(`${mhead('Vacances i festius')}<div class="md-in">
+    <p class="muted" style="margin:0 0 14px;font-size:13px">Aquests dies les classes desapareixen del calendari, de la planificació i dels recordatoris. L\u2019horari habitual no canvia.</p>
+    <div class="fld"><span>Els teus períodes</span></div>
+    <div style="margin-bottom:14px">${list.map(p=>`<div class="rem-row"><div style="min-width:0"><div class="r-t">${esc(p.name||'Vacances')}</div><div class="r-m">${rng(p)} · ${p.scope==='all'?'Tot l\u2019horari':'Només classes'}</div></div><button type="button" class="btn-s" style="margin-left:auto" data-offdel="${esc(p.id)}">Treu</button></div>`).join('')||'<p class="muted" style="font-size:13px;margin:4px 0">Encara no n\u2019has afegit cap.</p>'}</div>
+    <form class="ed" id="off-f">
+      ${fld('Nom',`<input name="name" placeholder="Vacances de Nadal" autocomplete="off">`,'full')}
+      ${fld('Des de',`<input type="date" name="from" required value="${t}">`)}${fld('Fins a (inclòs)',`<input type="date" name="to" required value="${t}">`)}
+      <div class="full fld"><span>Què es treu</span><div class="scope">
+        <label><input type="radio" name="scope" value="classes" checked><span><b>Només les classes</b><br><span class="muted">Entrenaments i partits es mantenen.</span></span></label>
+        <label><input type="radio" name="scope" value="all"><span><b>Tot l\u2019horari</b><br><span class="muted">Res de l\u2019horari habitual aquests dies.</span></span></label></div></div>
+      <div class="ed-foot"><span class="sp"></span><button type="button" class="btn ghost" data-close>Tanca</button><button class="btn primary">Afegeix el període</button></div>
+    </form>
+    <div class="fld" style="margin-top:16px"><span>Festius detectats als teus calendaris</span></div>
+    ${holis.map(e=>`<div class="rem-row"><i class="dot" style="--c:${cat((feedOf(e)||{}).cat).color}"></i><div style="min-width:0"><div class="r-t">${esc(e.title)}</div><div class="r-m">${e.date===e.end_date?fmtShort(e.date):fmtShort(e.date)+' – '+fmtShort(e.end_date)} · sense classes</div></div></div>`).join('')||'<p class="muted" style="font-size:13px;margin:4px 0">Cap festiu proper. Es detecten sols des del calendari «Festius» connectat.</p>'}
+  </div>`,md=>{
+    const saveList=l=>put('cfg',{...cfg(),id:'main',off:l});
+    $$('[data-offdel]',md).forEach(b=>b.addEventListener('click',()=>{saveList(offPeriods().filter(p=>p.id!==b.dataset.offdel));openOff();toast('Període tret. Les classes tornen a sortir.')}));
+    $('#off-f',md).addEventListener('submit',e=>{e.preventDefault();const f=e.target;let a=f.from.value,b=f.to.value;if(!a||!b){toast('Tria les dates.');return}if(b<a)[a,b]=[b,a];
+      saveList([...offPeriods(),{id:uid(),name:f.name.value.trim()||'Vacances',from:a,to:b,scope:f.scope.value}]);openOff();toast('Període afegit. Aquests dies no surten les classes.')});
+  });
 }
 
 /* calendar feeds (settings) */
@@ -1894,6 +1939,7 @@ document.addEventListener('click',e=>{
       case 'toggle-sch':st.showSch=!st.showSch;render();break;
       case 'toggle-free':st.showFree=!st.showFree;saveUi();render();break;
       case 'new-sch':openCreate('sch',{});break;
+      case 'off-days':openOff();break;
       case 'plan-prev':st.planDate=addDays(st.planDate,-1);render();break;
       case 'plan-next':st.planDate=addDays(st.planDate,1);render();break;
       case 'plan-today':st.planDate=today();render();break;

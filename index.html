@@ -621,6 +621,15 @@ body.is-dragging{cursor:grabbing;user-select:none}
 .pick-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
 .pick-b b{font-weight:600;overflow-wrap:anywhere}
 .pick-b span{font-size:12.5px;color:var(--ink-3)}
+
+.tchips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 6px;scrollbar-width:none}
+.tchip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:7px 12px;font-variant-numeric:tabular-nums;font-weight:500;font-size:13.5px}
+.tchip.on{background:var(--ink);border-color:var(--ink);color:var(--surface)}
+.pk-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:8px}
+.pk-sum{margin:12px 0 0;font-size:13.5px;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:9px 11px}
+.pk-sum:empty{display:none}
+.pick-row.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);background:var(--accent-soft)}
+.pick{max-height:34vh}
 </style>
 </head>
 <body>
@@ -1482,7 +1491,7 @@ function vPlanM(){
       <div class="tl-time"><b>${fromMin(o.start)}</b><span>${fromMin(o.end)}</span></div>
       <div class="tl-card" style="--c:${col}"><div class="tl-t">${o.type==='task'?I.check:o.type==='ext'?I.link:''}${esc(o.title)}</div>
       <div class="tl-m">${[o.location,durTxt(o.end-o.start),o.type==='task'?'Tasca planificada':''].filter(Boolean).map(esc).join(' · ')}</div>
-      ${o.type==='task'&&!o.done?`<div class="pl-acts"><button class="btn-s" data-unslot="${esc(o.id)}">Treu del dia</button><button class="btn-s" data-toggle-task="${esc(o.id)}">${I.tick} Feta</button></div>`:''}</div></div>`;
+      ${o.type==='task'&&!o.done?`<div class="pl-acts"><button class="btn-s" data-reslot="${esc(o.id)}">Canvia l\u2019hora</button><button class="btn-s" data-unslot="${esc(o.id)}">Treu</button><button class="btn-s" data-toggle-task="${esc(o.id)}">${I.tick} Feta</button></div>`:''}</div></div>`;
   }
   if(!nowPut&&nm>=0&&nm<c.dayEnd*60)html+=nowRow();
   const prio=pend.filter(x=>x.prio==='urgent'||x.prio==='high'||isOverdue(x)||x.due===d);
@@ -1503,19 +1512,64 @@ function vPlanM(){
   <section class="m-sec"><div class="sec-h"><h3>Per col·locar</h3><span class="n">${pend.length}</span></div>
     <div class="tlist">${pend.map(x=>taskRow(x,{place:true})).join('')||'<div class="empty">No tens tasques pendents per col·locar.</div>'}</div></section>`};
 }
-function openPick(date,a,b){
+function timeChips(a,b,sel){
+  const out=[];for(let m=a;m<=b-15;m+=m%30?(30-m%30):30)out.push(m);
+  if(!out.includes(sel))out.push(sel);out.sort((x,y)=>x-y);
+  return out.map(m=>`<button type="button" class="tchip ${m===sel?'on':''}" data-tm="${m}">${fromMin(m)}</button>`).join('');
+}
+function openPick(date,a,b,preId){
   const len=b-a,pend=sortTasks(tasksAll().filter(x=>!x.done&&!x.slot));
-  openModal(`${mhead(`${fromMin(a)}–${fromMin(b)} · ${durTxt(len)} lliures`)}<div class="md-in">
-    <p class="muted" style="margin:0 0 10px;font-size:13px">Tria quina tasca vols fer en aquest espai.</p>
-    <div class="pick">${pend.map(x=>{const dur=x.dur||60,fits=dur<=len;return `<button class="pick-row" data-pick="${esc(x.id)}" style="--c:${cat(x.cat).color}">
-      <span class="pick-b"><b>${esc(x.title)}</b><span>${durTxt(dur)}${x.due?' · '+fmtRel(x.due)+(x.time?' '+x.time:''):''}${fits?'':' · no hi cap sencera'}</span></span>
-      ${x.prio!=='med'?`<span class="prio prio-${x.prio}">${PRIO[x.prio]}</span>`:''}</button>`}).join('')||'<p class="empty">No tens tasques pendents.</p>'}</div>
-    <div class="ed-foot"><button type="button" class="btn ghost" data-newin>${I.plus} Tasca nova aquí</button><span class="sp"></span><button type="button" class="btn ghost" data-close>Tanca</button></div>
+  let start=a,dur=Math.min(60,len),chosen=preId||null;
+  const durs=[15,30,45,60,90,120,180,240].filter(m=>m<=len);if(!durs.includes(len)&&len<=300)durs.push(len);durs.sort((x,y)=>x-y);
+  openModal(`${mhead(`Espai lliure · ${fromMin(a)}–${fromMin(b)}`)}<div class="md-in">
+    <div class="fld"><span>1 · Tria la tasca</span></div>
+    <div class="pick">${pend.map(x=>`<button type="button" class="pick-row" data-pick="${esc(x.id)}" style="--c:${cat(x.cat).color}">
+      <span class="pick-b"><b>${esc(x.title)}</b><span>${durTxt(x.dur||60)}${x.due?' · '+fmtRel(x.due)+(x.time?' '+x.time:''):''}</span></span>
+      ${x.prio!=='med'?`<span class="prio prio-${x.prio}">${PRIO[x.prio]}</span>`:''}</button>`).join('')||'<p class="empty">No tens tasques pendents. Crea’n una amb el botó de sota.</p>'}</div>
+    <div class="fld" style="margin-top:16px"><span>2 · A quina hora comença?</span></div>
+    <div class="tchips" id="tchips">${timeChips(a,b,start)}</div>
+    <div class="pk-row"><label class="fld"><span>Hora exacta</span><input type="time" id="pk-start" step="300" min="${fromMin(a)}" max="${fromMin(b-15)}" value="${fromMin(start)}"></label>
+      <label class="fld"><span>Durada</span><select id="pk-dur">${durs.map(m=>`<option value="${m}" ${m===dur?'selected':''}>${durTxt(m)}</option>`).join('')}</select></label></div>
+    <p class="pk-sum" id="pk-sum"></p>
+    <div class="ed-foot"><button type="button" class="btn ghost" data-newin>${I.plus} Tasca nova</button><span class="sp"></span><button type="button" class="btn primary" id="pk-go" disabled>Posa-la</button></div>
   </div>`,md=>{
-    $$('[data-pick]',md).forEach(btn=>btn.addEventListener('click',()=>{const x=S.task[btn.dataset.pick];if(!x)return;const dur=Math.min(x.dur||60,len);
-      put('task',{...clone(x),slot:{date,start:fromMin(a),end:fromMin(a+dur)}});closeModal();
-      toast(dur<(x.dur||60)?`Posada de ${fromMin(a)} a ${fromMin(a+dur)} (només hi cabia ${durTxt(dur)}).`:`«${x.title}» a les ${fromMin(a)}.`)}));
-    md.querySelector('[data-newin]').addEventListener('click',()=>openCreate('task',{due:date,slot:{date,start:fromMin(a),end:fromMin(Math.min(b,a+60))},dur:Math.min(60,len)}));
+    const sum=$('#pk-sum',md),go=$('#pk-go',md),st_=$('#pk-start',md),du=$('#pk-dur',md),chips=$('#tchips',md);
+    const upd=()=>{const maxD=b-start;if(dur>maxD)dur=maxD;
+      $$('option',du).forEach(o=>o.disabled=+o.value>maxD);if(+du.value!==dur){if(![...du.options].some(o=>+o.value===dur)){const o=document.createElement('option');o.value=dur;o.textContent=durTxt(dur);du.appendChild(o)}du.value=dur}
+      $$('.tchip',chips).forEach(c=>c.classList.toggle('on',+c.dataset.tm===start));
+      $$('.pick-row',md).forEach(r=>r.classList.toggle('on',r.dataset.pick===chosen));
+      const x=chosen&&S.task[chosen];
+      sum.innerHTML=x?`<b>${esc(x.title)}</b> · ${fromMin(start)}–${fromMin(start+dur)}`:`${fromMin(start)}–${fromMin(start+dur)} · tria una tasca`;
+      go.disabled=!x};
+    $$('[data-pick]',md).forEach(btn=>btn.addEventListener('click',()=>{chosen=btn.dataset.pick;const x=S.task[chosen];if(x)dur=Math.min(x.dur||60,b-start);upd()}));
+    chips.addEventListener('click',e=>{const c=e.target.closest('[data-tm]');if(!c)return;start=+c.dataset.tm;st_.value=fromMin(start);upd()});
+    st_.addEventListener('change',()=>{let m=toMin(st_.value);if(m==null)return;m=Math.max(a,Math.min(b-15,m));start=m;st_.value=fromMin(m);if(!$(`[data-tm="${m}"]`,chips))chips.innerHTML=timeChips(a,b,m);upd()});
+    du.addEventListener('change',()=>{dur=+du.value;upd()});
+    go.addEventListener('click',()=>{const x=S.task[chosen];if(!x)return;put('task',{...clone(x),slot:{date,start:fromMin(start),end:fromMin(start+dur)}});closeModal();toast(`«${x.title}» de ${fromMin(start)} a ${fromMin(start+dur)}.`)});
+    md.querySelector('[data-newin]').addEventListener('click',()=>openCreate('task',{due:date,slot:{date,start:fromMin(start),end:fromMin(start+dur)},dur}));
+    upd();
+  });
+}
+function openReslot(id){
+  const x=S.task[id];if(!x||!x.slot)return;
+  const date=x.slot.date,a0=toMin(x.slot.start),d0=toMin(x.slot.end)-a0;
+  const c=cfg();const slots=freeFrom(busyOn(date,'task:'+id),c.dayStart*60,c.dayEnd*60,15);
+  const durs=[15,30,45,60,90,120,180,240];if(!durs.includes(d0))durs.push(d0);durs.sort((p,q)=>p-q);
+  openModal(`${mhead('Canvia l’hora')}<div class="md-in">
+    <p style="margin:0 0 12px"><b>${esc(x.title)}</b></p>
+    <div class="pk-row"><label class="fld"><span>Dia</span><input type="date" id="rs-date" value="${date}"></label><label class="fld"><span>Comença</span><input type="time" id="rs-start" step="300" value="${fromMin(a0)}"></label><label class="fld"><span>Durada</span><select id="rs-dur">${durs.map(m=>`<option value="${m}" ${m===d0?'selected':''}>${durTxt(m)}</option>`).join('')}</select></label></div>
+    <p class="muted" style="font-size:12.5px;margin:10px 0 4px">Espais lliures aquest dia:</p>
+    <div class="tchips">${slots.map(([p,q])=>`<button type="button" class="tchip" data-fs="${p}">${fromMin(p)}–${fromMin(q)}</button>`).join('')||'<span class="muted">Cap</span>'}</div>
+    <p class="pk-sum" id="rs-msg"></p>
+    <div class="ed-foot"><span class="sp"></span><button type="button" class="btn ghost" data-close>Cancel·la</button><button type="button" class="btn primary" id="rs-go">Desa</button></div>
+  </div>`,md=>{
+    $$('[data-fs]',md).forEach(b=>b.addEventListener('click',()=>{$('#rs-start',md).value=fromMin(+b.dataset.fs)}));
+    $('#rs-go',md).addEventListener('click',()=>{const d=$('#rs-date',md).value||date,m=toMin($('#rs-start',md).value),du=+$('#rs-dur',md).value;
+      if(m==null){return}
+      if(m+du>24*60){$('#rs-msg',md).textContent='Acabaria després de mitjanit.';return}
+      const clash=occs(d,d).find(o=>o.key!=='task:'+id&&!(o.type==='task'&&o.done)&&o.start<m+du&&o.end>m);
+      if(clash){$('#rs-msg',md).innerHTML=`A aquesta hora ja tens <b>${esc(clash.title)}</b> (${fromMin(clash.start)}–${fromMin(clash.end)}). Tria un dels espais lliures.`;return}
+      put('task',{...clone(x),slot:{date:d,start:fromMin(m),end:fromMin(m+du)}});closeModal();toast(`Canviada a ${fmtRel(d).toLowerCase()} de ${fromMin(m)} a ${fromMin(m+du)}.`)});
   });
 }
 function autoPlace(id,date,silent){
@@ -2044,6 +2098,7 @@ document.addEventListener('click',e=>{
   }
   const tg=t.closest('[data-toggle-task]');if(tg){toggleTask(tg.dataset.toggleTask);return}
   const ps=t.closest('[data-pickslot]');if(ps){const [d,a,b]=ps.dataset.pickslot.split('|');openPick(d,+a,+b);return}
+  const rsl=t.closest('[data-reslot]');if(rsl){openReslot(rsl.dataset.reslot);return}
   const us=t.closest('[data-unslot]');if(us){const x=S.task[us.dataset.unslot];if(x){const prev=clone(x);put('task',{...clone(x),slot:null});toast('Tret del dia.',{action:{label:'Desfés',fn:()=>put('task',prev)}})}return}
   const pd_=t.closest('[data-plan-day]');if(pd_){st.planDate=pd_.dataset.planDay;render();return}
   const pl=t.closest('[data-place]');if(pl){autoPlace(pl.dataset.place,st.route==='planificar'?st.planDate:today());return}

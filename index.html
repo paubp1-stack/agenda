@@ -456,6 +456,7 @@ body.is-dragging{cursor:grabbing;user-select:none}
 .feed-b{flex:1;min-width:0;display:flex;flex-direction:column}
 .feed-b span{font-size:12px;color:var(--ink-3);overflow-wrap:anywhere}
 .feed-b .feed-err{color:var(--danger)}
+.feed-src{font-style:normal;font-size:11px;font-weight:500;color:var(--ink-3);margin-left:6px}
 .ext-notes{white-space:pre-wrap;font-size:13px;color:var(--ink-2);background:var(--surface-2);border-radius:8px;padding:10px 12px;max-height:240px;overflow:auto;margin:0;overflow-wrap:anywhere}
 .icon-btn.on{background:var(--accent-soft);color:var(--accent)}
 /* swipeable task rows */
@@ -789,7 +790,7 @@ function saveExtLocal(){try{localStorage.setItem(LSX(),JSON.stringify({f:FEEDS,e
 async function pullExt(){
   if(!SB||!USER)return;
   try{
-    const {data:f,error:e1}=await SB.from('feeds').select('id,name,url,cat,reminder,enabled,last_sync,last_error,event_count,created_at').order('created_at');if(e1)throw e1;
+    const {data:f,error:e1}=await SB.from('feeds').select('id,name,url,cat,reminder,enabled,last_sync,last_error,event_count,created_at,source').order('created_at');if(e1)throw e1;
     const {data:x,error:e2}=await SB.from('ext_events').select('feed_id,uid,date,end_date,all_day,start_min,end_min,title,location,notes').gte('end_date',addDays(today(),-40)).lte('date',addDays(today(),200)).order('date').limit(5000);if(e2)throw e2;
     FEEDS={};(f||[]).forEach(r=>FEEDS[r.id]=r);EXT=x||[];saveExtLocal();scheduleRender();remindersSoon();
   }catch(e){}
@@ -1482,7 +1483,7 @@ function vSettings(){
     <section><div><h3>Perfil</h3><p class="desc">El nom surt a la salutació.</p></div>
       <div><label class="fld"><span>Com et dius?</span><input id="set-name" value="${esc(c.name)}" placeholder="El teu nom" autocomplete="given-name"></label></div></section>
     <section><div><h3>Calendaris connectats</h3><p class="desc">Google Calendar o calendaris compartits. S\u2019actualitzen sols cada 15 minuts.</p></div>
-      <div>${Object.values(FEEDS).map(f=>`<div class="feed-row"><i class="dot" style="--c:${cat(f.cat).color}"></i><div class="feed-b"><b>${esc(f.name)}</b><span class="${f.last_error?'feed-err':''}">${f.last_error?esc(f.last_error):f.last_sync?`Actualitzat ${relAgo(f.last_sync)} · ${f.event_count} esdeveniments`:'Pendent de la primera lectura'}</span></div><button class="icon-btn" data-feed-sync="${f.id}" aria-label="Actualitza ara">${I.sync}</button><button class="btn-s" data-feed-edit="${f.id}">Edita</button></div>`).join('')||'<p class="muted" style="margin:0 0 10px;font-size:13px">Encara no hi has connectat cap calendari.</p>'}
+      <div>${Object.values(FEEDS).map(f=>`<div class="feed-row"><i class="dot" style="--c:${cat(f.cat).color}"></i><div class="feed-b"><b>${esc(f.name)}${f.source==='gcal'?' <em class="feed-src">Google · cada matí</em>':''}</b><span class="${f.last_error?'feed-err':''}">${!f.enabled?'Amagat a l\u2019agenda':f.last_error?esc(f.last_error):f.last_sync?`Actualitzat ${relAgo(f.last_sync)} · ${f.event_count} esdeveniments`:'Pendent de la primera lectura'}</span></div>${f.source==='gcal'?'':`<button class="icon-btn" data-feed-sync="${f.id}" aria-label="Actualitza ara">${I.sync}</button>`}<button class="btn-s" data-feed-edit="${f.id}">Edita</button></div>`).join('')||'<p class="muted" style="margin:0 0 10px;font-size:13px">Encara no hi has connectat cap calendari.</p>'}
       <button class="btn" data-act="feed-add" style="margin-top:8px">${I.plus} Connecta un calendari</button></div></section>
     <section><div><h3>Franja del calendari</h3><p class="desc">Hores que es mostren al calendari, a l\u2019horari i a la planificació.</p></div>
       <div style="display:flex;gap:12px"><label class="fld"><span>Comença</span><select id="set-ds">${hours(0,12,c.dayStart)}</select></label><label class="fld"><span>Acaba</span><select id="set-de">${hours(14,24,c.dayEnd)}</select></label></div></section>
@@ -1669,18 +1670,21 @@ function openExt(key){
 function openFeed(id){
   const f=id?FEEDS[id]:null;
   const v=f||{name:'',url:'',cat:'esport',reminder:60};
+  const g=f&&f.source==='gcal';
   openModal(`${mhead(f?'Calendari connectat':'Connecta un calendari')}<div class="md-in"><form class="ed">
     <input class="ed-title" name="title" placeholder="Nom (p. ex. Partits, Exàmens…)" value="${esc(v.name)}" required autocomplete="off" autofocus>
-    ${fld('Enllaç del calendari (.ics)',`<input type="url" name="url" value="${esc(v.url)}" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" required autocomplete="off" inputmode="url">`,'full')}
+    ${g?`<div class="note-box">Aquest calendari ve del teu Google Calendar. S\u2019actualitza cada matí amb els esdeveniments de les pròximes tres setmanes. Aquí pots canviar-ne el nom, la categoria i l\u2019avís, o amagar-lo.</div>`:fld('Enllaç del calendari (.ics)',`<input type="url" name="url" value="${esc(v.url||'')}" placeholder="https://calendar.google.com/calendar/ical/…/basic.ics" required autocomplete="off" inputmode="url">`,'full')}
     ${f?'':`<div class="note-box"><b>Google Calendar:</b> a l\u2019ordinador, obre calendar.google.com › Configuració (roda dentada) › tria el calendari a l\u2019esquerra › «Integra el calendari» › copia l\u2019<b>Adreça secreta en format iCal</b>.<br><b>Calendari compartit:</b> enganxa l\u2019enllaç .ics o webcal:// que et donin.</div>`}
     ${fld('Categoria a l\u2019agenda',catPicker(v.cat),'full')}
     ${fld('Avís per defecte',remPicker(v.reminder))}
     <div class="note-box" style="grid-column:auto">Els esdeveniments de tot el dia (com exàmens) avisen el vespre abans, a les 20:00.</div>
-    <div class="ed-foot">${f?`<button type="button" class="btn ghost danger" data-del>${I.trash} Desconnecta</button>`:''}<span class="sp"></span><button type="button" class="btn ghost" data-close>Cancel·la</button><button class="btn primary">${f?'Desa':'Connecta'}</button></div>
+    <div class="ed-foot">${g?`<button type="button" class="btn ghost" data-gtoggle>${f.enabled?'Amaga aquest calendari':'Torna a mostrar-lo'}</button>`:f?`<button type="button" class="btn ghost danger" data-del>${I.trash} Desconnecta</button>`:''}<span class="sp"></span><button type="button" class="btn ghost" data-close>Cancel·la</button><button class="btn primary">${f?'Desa':'Connecta'}</button></div>
   </form></div>`,md=>{
     bindRem(md);
     bindDelete(md,async()=>{const {error}=await SB.from('feeds').delete().eq('id',id);if(error){toast('No s\u2019ha pogut desconnectar.');return}delete FEEDS[id];EXT=EXT.filter(e=>e.feed_id!==id);saveExtLocal();render();toast('Calendari desconnectat.')});
+    const gt=md.querySelector('[data-gtoggle]');if(gt)gt.addEventListener('click',async()=>{const {error}=await SB.from('feeds').update({enabled:!f.enabled}).eq('id',id);if(error){toast('No s\u2019ha pogut canviar.');return}FEEDS[id]={...f,enabled:!f.enabled};closeModal();render();toast(f.enabled?'Calendari amagat. Ja no sortirà a l\u2019agenda.':'Calendari visible de nou. Els esdeveniments tornaran a sortir a partir del pròxim matí.')});
     md.querySelector('form').addEventListener('submit',async ev=>{ev.preventDefault();const fm=ev.target;
+      if(g){const row={name:fm.title.value.trim()||f.name,cat:(fm.cat&&fm.cat.value)||'altres',reminder:readRem(fm)};const {error}=await SB.from('feeds').update(row).eq('id',id);if(error){toast('No s\u2019ha pogut desar.');return}FEEDS[id]={...f,...row};closeModal();render();remindersSoon();toast('Canvis desats.');return}
       const url=fm.url.value.trim().replace(/^webcal:\/\//i,'https://');
       if(!/^https:\/\/\S+$/i.test(url)){toast('L\u2019enllaç ha de començar per https:// o webcal://');return}
       const row={name:fm.title.value.trim()||'Calendari',url,cat:(fm.cat&&fm.cat.value)||'altres',reminder:readRem(fm)};
@@ -1690,7 +1694,7 @@ function openFeed(id){
       else res=await SB.from('feeds').insert({...row,user_id:USER.id}).select().single();
       if(res.error){btn.disabled=false;toast('No s\u2019ha pogut desar. Comprova la connexió.');return}
       FEEDS[res.data.id]=res.data;closeModal();render();
-      if(!f||f.url!==url)syncFeedNow(res.data.id);else{pullExt();toast('Canvis desats.')}
+      if(!f||f.url!==url)syncFeedNow(res.data.id);else{pullExt();remindersSoon();toast('Canvis desats.')}
     });
   });
 }

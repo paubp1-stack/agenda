@@ -2,7 +2,7 @@
 <html lang="ca">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
 <title>Agenda</title>
 <meta name="theme-color" content="#f5f5f3" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#131416" media="(prefers-color-scheme: dark)">
@@ -630,6 +630,49 @@ body.is-dragging{cursor:grabbing;user-select:none}
 .pk-sum:empty{display:none}
 .pick-row.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-soft);background:var(--accent-soft)}
 .pick{max-height:34vh}
+
+/* ---------- iPhone / Safari hardening ---------- */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+input[type=date],input[type=time]{-webkit-appearance:none;appearance:none;display:block;min-width:0;max-width:100%;min-height:40px;text-align:left;line-height:1.2}
+input[type=date]::-webkit-date-and-time-value,input[type=time]::-webkit-date-and-time-value{text-align:left;margin:0}
+.fld{min-width:0;max-width:100%}
+.row3>*,.ed>*,.pk-row>*{min-width:0}
+body.modal-open{overflow:hidden}
+body.modal-open .view{overflow:hidden}
+body.modal-open .fab,body[data-route=planificar] .fab{display:none}
+.md{overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+.tchips.wrap{flex-wrap:wrap;overflow:visible}
+.tchip.day{display:flex;flex-direction:column;align-items:center;line-height:1.1;padding:6px 10px;min-width:46px}
+.tchip.day small{font-size:10.5px;text-transform:uppercase;opacity:.7;font-weight:600}
+.pk-step{display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;margin:16px 0 8px}
+.pk-step:first-child{margin-top:4px}
+.pk-n{width:22px;height:22px;border-radius:50%;background:var(--ink);color:var(--surface);display:grid;place-items:center;font-size:12px;flex:none}
+.pk .pick{max-height:none}
+.pick-new{border-style:dashed;border-left-width:1px;color:var(--ink-2)}
+.pick-new .i{color:var(--accent)}
+.pk-bar{position:sticky;bottom:0;display:flex;align-items:center;gap:12px;padding:12px 20px calc(12px + env(safe-area-inset-bottom));background:var(--surface);border-top:1px solid var(--line)}
+.pk-bar>span{flex:1;min-width:0;font-size:13.5px;line-height:1.35;font-variant-numeric:tabular-nums}
+.pk-bar .btn{padding:11px 20px;font-size:15px;font-weight:600}
+.pk-bar .btn:disabled{opacity:.45}
+@media (max-width: 860px){
+  input,select,textarea,.quick input{font-size:16px!important}
+  .ed-title{font-size:20px!important}
+  .md{max-height:88vh;max-height:88dvh;padding-bottom:env(safe-area-inset-bottom)}
+  .md:has(.pk-bar){padding-bottom:0}
+  #toasts{top:calc(env(safe-area-inset-top) + 10px);bottom:auto}
+  .tchip{padding:9px 13px;font-size:14.5px}
+  .ed-foot{flex-wrap:wrap}
+  .seg-type{display:flex;overflow-x:auto;scrollbar-width:none}
+  .seg-type button{flex:1 0 auto}
+}
+/* Safari < 16.2 has no color-mix(): keep blocks readable */
+@supports not (color: color-mix(in srgb, red 50%, blue)){
+  .ev,.ev-sch,.ev-ext,.tl-card,.adchip,.m-chip,.daybar .blk,.cp input:checked+span,.free,.pl-slot,.prio-high{background:var(--surface-2)}
+  .ev,.tl-t,.adchip,.m-chip{color:var(--ink)}
+  .m-focus{background:var(--c)}
+  @media (max-width: 860px){.ev,.ev-sch,.ev-ext{background:var(--c);color:#fff}}
+}
+.rs-grp{margin-bottom:10px}.rs-grp>span{display:block;font-size:12px;color:var(--ok);font-weight:600;margin:0 0 6px}
 </style>
 </head>
 <body>
@@ -1080,6 +1123,7 @@ function render(){
   v.innerHTML=r.html;
   $('#top-title').textContent=r.title;
   $$('#nav a,#tabbar a').forEach(a=>a.classList.toggle('on',a.dataset.r===st.route));
+  document.body.dataset.route=st.route;
   const sc2=v.querySelector('.tg-scroll');
   if(sc2){const k=st.route+st.calView;if(st.scroll[k]!=null)sc2.scrollTop=st.scroll[k];else{const c=cfg();const target=Math.max(0,(Math.max(c.dayStart*60,nowMin()-120)-c.dayStart*60)/60*hh());sc2.scrollTop=st.route==='horari'?0:target;}}
   r.after&&r.after(v);
@@ -1512,64 +1556,77 @@ function vPlanM(){
   <section class="m-sec"><div class="sec-h"><h3>Per col·locar</h3><span class="n">${pend.length}</span></div>
     <div class="tlist">${pend.map(x=>taskRow(x,{place:true})).join('')||'<div class="empty">No tens tasques pendents per col·locar.</div>'}</div></section>`};
 }
-function timeChips(a,b,sel){
-  const out=[];for(let m=a;m<=b-15;m+=m%30?(30-m%30):30)out.push(m);
-  if(!out.includes(sel))out.push(sel);out.sort((x,y)=>x-y);
-  return out.map(m=>`<button type="button" class="tchip ${m===sel?'on':''}" data-tm="${m}">${fromMin(m)}</button>`).join('');
-}
+const DUR_OPTS=[15,30,45,60,90,120,150,180,240];
+function startsIn(slots,dur){const out=[];for(const [p,q] of slots){for(let m=Math.ceil(p/15)*15;m+dur<=q;m+=15)out.push(m)}return out}
+function chipRow(list,sel,attr,fmt){return list.map(v=>`<button type="button" class="tchip ${v===sel?'on':''}" data-${attr}="${v}">${fmt(v)}</button>`).join('')}
+/* place a task inside one free slot: choose task, duration and start with big buttons */
 function openPick(date,a,b,preId){
   const len=b-a,pend=sortTasks(tasksAll().filter(x=>!x.done&&!x.slot));
-  let start=a,dur=Math.min(60,len),chosen=preId||null;
-  const durs=[15,30,45,60,90,120,180,240].filter(m=>m<=len);if(!durs.includes(len)&&len<=300)durs.push(len);durs.sort((x,y)=>x-y);
-  openModal(`${mhead(`Espai lliure · ${fromMin(a)}–${fromMin(b)}`)}<div class="md-in">
-    <div class="fld"><span>1 · Tria la tasca</span></div>
+  let chosen=preId||null,dur=Math.min(60,len),start=a;
+  openModal(`${mhead(`Lliure de ${fromMin(a)} a ${fromMin(b)}`)}<div class="md-in pk">
+    <div class="pk-step"><span class="pk-n">1</span>Quina tasca?</div>
     <div class="pick">${pend.map(x=>`<button type="button" class="pick-row" data-pick="${esc(x.id)}" style="--c:${cat(x.cat).color}">
       <span class="pick-b"><b>${esc(x.title)}</b><span>${durTxt(x.dur||60)}${x.due?' · '+fmtRel(x.due)+(x.time?' '+x.time:''):''}</span></span>
-      ${x.prio!=='med'?`<span class="prio prio-${x.prio}">${PRIO[x.prio]}</span>`:''}</button>`).join('')||'<p class="empty">No tens tasques pendents. Crea’n una amb el botó de sota.</p>'}</div>
-    <div class="fld" style="margin-top:16px"><span>2 · A quina hora comença?</span></div>
-    <div class="tchips" id="tchips">${timeChips(a,b,start)}</div>
-    <div class="pk-row"><label class="fld"><span>Hora exacta</span><input type="time" id="pk-start" step="300" min="${fromMin(a)}" max="${fromMin(b-15)}" value="${fromMin(start)}"></label>
-      <label class="fld"><span>Durada</span><select id="pk-dur">${durs.map(m=>`<option value="${m}" ${m===dur?'selected':''}>${durTxt(m)}</option>`).join('')}</select></label></div>
-    <p class="pk-sum" id="pk-sum"></p>
-    <div class="ed-foot"><button type="button" class="btn ghost" data-newin>${I.plus} Tasca nova</button><span class="sp"></span><button type="button" class="btn primary" id="pk-go" disabled>Posa-la</button></div>
-  </div>`,md=>{
-    const sum=$('#pk-sum',md),go=$('#pk-go',md),st_=$('#pk-start',md),du=$('#pk-dur',md),chips=$('#tchips',md);
-    const upd=()=>{const maxD=b-start;if(dur>maxD)dur=maxD;
-      $$('option',du).forEach(o=>o.disabled=+o.value>maxD);if(+du.value!==dur){if(![...du.options].some(o=>+o.value===dur)){const o=document.createElement('option');o.value=dur;o.textContent=durTxt(dur);du.appendChild(o)}du.value=dur}
-      $$('.tchip',chips).forEach(c=>c.classList.toggle('on',+c.dataset.tm===start));
-      $$('.pick-row',md).forEach(r=>r.classList.toggle('on',r.dataset.pick===chosen));
+      ${x.prio!=='med'?`<span class="prio prio-${x.prio}">${PRIO[x.prio]}</span>`:''}</button>`).join('')||'<p class="empty">No tens tasques pendents.</p>'}
+      <button type="button" class="pick-row pick-new" data-newin>${I.plus}<span class="pick-b"><b>Tasca nova</b><span>La crees i es posa en aquest espai</span></span></button></div>
+    <div class="pk-step"><span class="pk-n">2</span>Quant de temps?</div>
+    <div class="tchips wrap" id="pk-durs"></div>
+    <div class="pk-step"><span class="pk-n">3</span>A quina hora comences?</div>
+    <div class="tchips wrap" id="pk-starts"></div>
+  </div>
+  <div class="pk-bar"><span id="pk-sum"></span><button type="button" class="btn primary" id="pk-go" disabled>Posa-la</button></div>`,md=>{
+    const D=$('#pk-durs',md),Sx=$('#pk-starts',md),sum=$('#pk-sum',md),go=$('#pk-go',md);
+    const draw=()=>{
+      const durs=DUR_OPTS.filter(m=>m<=len);if(!durs.includes(len)&&len<=300)durs.push(len);durs.sort((p,q)=>p-q);
+      if(dur>len)dur=len;
+      D.innerHTML=chipRow(durs,dur,'pd',durTxt);
+      const st0=startsIn([[a,b]],dur);if(!st0.includes(start))start=st0[0]??a;
+      Sx.innerHTML=chipRow(st0,start,'ps',fromMin);
+      $$('.pick-row[data-pick]',md).forEach(r=>r.classList.toggle('on',r.dataset.pick===chosen));
       const x=chosen&&S.task[chosen];
-      sum.innerHTML=x?`<b>${esc(x.title)}</b> · ${fromMin(start)}–${fromMin(start+dur)}`:`${fromMin(start)}–${fromMin(start+dur)} · tria una tasca`;
+      sum.innerHTML=x?`<b>${esc(x.title)}</b><br>${fromMin(start)}–${fromMin(start+dur)}`:`${fromMin(start)}–${fromMin(start+dur)}<br><span class="muted">Tria una tasca</span>`;
       go.disabled=!x};
-    $$('[data-pick]',md).forEach(btn=>btn.addEventListener('click',()=>{chosen=btn.dataset.pick;const x=S.task[chosen];if(x)dur=Math.min(x.dur||60,b-start);upd()}));
-    chips.addEventListener('click',e=>{const c=e.target.closest('[data-tm]');if(!c)return;start=+c.dataset.tm;st_.value=fromMin(start);upd()});
-    st_.addEventListener('change',()=>{let m=toMin(st_.value);if(m==null)return;m=Math.max(a,Math.min(b-15,m));start=m;st_.value=fromMin(m);if(!$(`[data-tm="${m}"]`,chips))chips.innerHTML=timeChips(a,b,m);upd()});
-    du.addEventListener('change',()=>{dur=+du.value;upd()});
+    $$('[data-pick]',md).forEach(btn=>btn.addEventListener('click',()=>{chosen=btn.dataset.pick;const x=S.task[chosen];if(x)dur=Math.min(x.dur||60,len);draw()}));
+    D.addEventListener('click',e=>{const c=e.target.closest('[data-pd]');if(c){dur=+c.dataset.pd;draw()}});
+    Sx.addEventListener('click',e=>{const c=e.target.closest('[data-ps]');if(c){start=+c.dataset.ps;draw()}});
     go.addEventListener('click',()=>{const x=S.task[chosen];if(!x)return;put('task',{...clone(x),slot:{date,start:fromMin(start),end:fromMin(start+dur)}});closeModal();toast(`«${x.title}» de ${fromMin(start)} a ${fromMin(start+dur)}.`)});
     md.querySelector('[data-newin]').addEventListener('click',()=>openCreate('task',{due:date,slot:{date,start:fromMin(start),end:fromMin(start+dur)},dur}));
-    upd();
+    draw();
   });
 }
+/* move a planned task: day, duration and start among real free times only */
 function openReslot(id){
   const x=S.task[id];if(!x||!x.slot)return;
-  const date=x.slot.date,a0=toMin(x.slot.start),d0=toMin(x.slot.end)-a0;
-  const c=cfg();const slots=freeFrom(busyOn(date,'task:'+id),c.dayStart*60,c.dayEnd*60,15);
-  const durs=[15,30,45,60,90,120,180,240];if(!durs.includes(d0))durs.push(d0);durs.sort((p,q)=>p-q);
-  openModal(`${mhead('Canvia l’hora')}<div class="md-in">
-    <p style="margin:0 0 12px"><b>${esc(x.title)}</b></p>
-    <div class="pk-row"><label class="fld"><span>Dia</span><input type="date" id="rs-date" value="${date}"></label><label class="fld"><span>Comença</span><input type="time" id="rs-start" step="300" value="${fromMin(a0)}"></label><label class="fld"><span>Durada</span><select id="rs-dur">${durs.map(m=>`<option value="${m}" ${m===d0?'selected':''}>${durTxt(m)}</option>`).join('')}</select></label></div>
-    <p class="muted" style="font-size:12.5px;margin:10px 0 4px">Espais lliures aquest dia:</p>
-    <div class="tchips">${slots.map(([p,q])=>`<button type="button" class="tchip" data-fs="${p}">${fromMin(p)}–${fromMin(q)}</button>`).join('')||'<span class="muted">Cap</span>'}</div>
-    <p class="pk-sum" id="rs-msg"></p>
-    <div class="ed-foot"><span class="sp"></span><button type="button" class="btn ghost" data-close>Cancel·la</button><button type="button" class="btn primary" id="rs-go">Desa</button></div>
-  </div>`,md=>{
-    $$('[data-fs]',md).forEach(b=>b.addEventListener('click',()=>{$('#rs-start',md).value=fromMin(+b.dataset.fs)}));
-    $('#rs-go',md).addEventListener('click',()=>{const d=$('#rs-date',md).value||date,m=toMin($('#rs-start',md).value),du=+$('#rs-dur',md).value;
-      if(m==null){return}
-      if(m+du>24*60){$('#rs-msg',md).textContent='Acabaria després de mitjanit.';return}
-      const clash=occs(d,d).find(o=>o.key!=='task:'+id&&!(o.type==='task'&&o.done)&&o.start<m+du&&o.end>m);
-      if(clash){$('#rs-msg',md).innerHTML=`A aquesta hora ja tens <b>${esc(clash.title)}</b> (${fromMin(clash.start)}–${fromMin(clash.end)}). Tria un dels espais lliures.`;return}
-      put('task',{...clone(x),slot:{date:d,start:fromMin(m),end:fromMin(m+du)}});closeModal();toast(`Canviada a ${fmtRel(d).toLowerCase()} de ${fromMin(m)} a ${fromMin(m+du)}.`)});
+  let date=x.slot.date,dur=toMin(x.slot.end)-toMin(x.slot.start),start=toMin(x.slot.start);
+  const ws=weekStart(date);
+  openModal(`${mhead('Canvia l’hora')}<div class="md-in pk">
+    <p style="margin:0 0 4px;font-weight:600">${esc(x.title)}</p>
+    <div class="pk-step">Dia</div>
+    <div class="tchips" id="rs-days"></div>
+    <div class="pk-step">Durada</div>
+    <div class="tchips wrap" id="rs-durs"></div>
+    <div class="pk-step">Comença <span class="muted" style="font-weight:400">· només hores lliures</span></div>
+    <div id="rs-starts"></div>
+  </div>
+  <div class="pk-bar"><span id="rs-sum"></span><button type="button" class="btn primary" id="rs-go">Desa</button></div>`,md=>{
+    const Dd=$('#rs-days',md),Du=$('#rs-durs',md),Ss=$('#rs-starts',md),sum=$('#rs-sum',md),go=$('#rs-go',md);
+    const days=Array.from({length:14},(_,i)=>addDays(today()>ws?today():ws,i));
+    const draw=()=>{
+      Dd.innerHTML=days.map(d=>`<button type="button" class="tchip day ${d===date?'on':''}" data-rd="${d}"><small>${DAYS_S[wd(d)]}</small>${pd(d).getDate()}</button>`).join('');
+      const c=cfg(),slots=freeFrom(busyOn(date,'task:'+id),c.dayStart*60,c.dayEnd*60,15).map(([p,q])=>date===today()?[Math.max(p,Math.ceil(nowMin()/15)*15),q]:[p,q]).filter(([p,q])=>q-p>=15);
+      const maxLen=Math.max(0,...slots.map(([p,q])=>q-p));
+      const durs=DUR_OPTS.filter(m=>m<=Math.max(maxLen,15));if(dur>maxLen&&maxLen>=15)dur=durs.filter(m=>m<=maxLen).pop()||15;
+      Du.innerHTML=chipRow(durs,dur,'rdu',durTxt);
+      const st0=startsIn(slots,dur);if(!st0.includes(start))start=st0[0];
+      Ss.innerHTML=st0.length?slots.filter(([p,q])=>q-p>=dur).map(([p,q])=>`<div class="rs-grp"><span>Lliure ${fromMin(p)}–${fromMin(q)}</span><div class="tchips wrap">${chipRow(startsIn([[p,q]],dur),start,'rst',fromMin)}</div></div>`).join(''):'<p class="muted" style="margin:4px 0">No hi ha cap espai lliure prou llarg aquest dia.</p>';
+      go.disabled=!st0.length;
+      sum.innerHTML=st0.length?`${fmtRel(date)}<br><b>${fromMin(start)}–${fromMin(start+dur)}</b>`:'';
+    };
+    Dd.addEventListener('click',e=>{const c=e.target.closest('[data-rd]');if(c){date=c.dataset.rd;draw()}});
+    Du.addEventListener('click',e=>{const c=e.target.closest('[data-rdu]');if(c){dur=+c.dataset.rdu;draw()}});
+    Ss.addEventListener('click',e=>{const c=e.target.closest('[data-rst]');if(c){start=+c.dataset.rst;draw()}});
+    go.addEventListener('click',()=>{if(start==null)return;put('task',{...clone(x),slot:{date,start:fromMin(start),end:fromMin(start+dur)}});closeModal();toast(`Canviada: ${fmtRel(date).toLowerCase()}, de ${fromMin(start)} a ${fromMin(start+dur)}.`)});
+    draw();const on=Dd.querySelector('.on');if(on)on.scrollIntoView({inline:'center',block:'nearest'});
   });
 }
 function autoPlace(id,date,silent){
@@ -1666,12 +1723,12 @@ function vSettings(){
 const MR=()=>$('#modal-root');
 function openModal(html,onMount){
   const r=MR();r.innerHTML=`<div class="mb" data-close></div><div class="md" role="dialog" aria-modal="true">${html}</div>`;
-  r.classList.add('open');
+  r.classList.add('open');document.body.classList.add('modal-open');
   const md=r.querySelector('.md');onMount&&onMount(md);
   const f=md.querySelector('[autofocus]')||md.querySelector('input:not([type=hidden]),textarea');
   if(f&&innerWidth>760){try{f.focus()}catch(e){}}
 }
-function closeModal(){const r=MR();r.classList.remove('open');r.innerHTML='';if(pendingRender)render()}
+function closeModal(){const r=MR();r.classList.remove('open');r.innerHTML='';document.body.classList.remove('modal-open');if(pendingRender)render()}
 const mhead=t=>`<div class="md-h"><h2>${t}</h2><button type="button" class="icon-btn" data-close aria-label="Tanca">${I.x}</button></div>`;
 const fld=(l,inner,cls='')=>`<label class="fld ${cls}"><span>${l}</span>${inner}</label>`;
 const catPicker=sel=>`<div class="catpick" role="radiogroup">${catsSorted().map(c=>`<label class="cp" style="--c:${safeColor(c.color)}"><input type="radio" name="cat" value="${c.id}" ${c.id===sel?'checked':''}><span><i class="dot"></i>${esc(c.name)}</span></label>`).join('')}</div>`;
